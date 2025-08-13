@@ -45,12 +45,12 @@ export class App {
 
     // 光照设置
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
-    this.scene.add(ambientLight);
+    // this.scene.add(ambientLight);
 
     const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
-    directionalLight.position.set(5, 10, 7);
+    directionalLight.position.set(0, 10, 0);
     directionalLight.castShadow = true;
-    this.scene.add(directionalLight);
+    // this.scene.add(directionalLight);
 
     // 获取UI元素
     this.backBtn = document.getElementById('back-btn');
@@ -146,10 +146,10 @@ export class App {
 
     // 创建浅灰色地板
     const planeGeometry = new THREE.PlaneGeometry(20, 10);
-    const planeMaterial = new THREE.MeshStandardMaterial({ 
-      color: 0xdddddd, // 浅灰色
-      side: THREE.DoubleSide,
-      roughness: 0.8
+    const planeMaterial = new THREE.MeshBasicMaterial({ 
+      color: 0x12ee3f, // 浅灰色
+      // side: THREE.DoubleSide,
+      // roughness: 0.8
     });
     const plane = new THREE.Mesh(planeGeometry, planeMaterial);
     plane.rotation.x = -Math.PI / 2;
@@ -163,10 +163,10 @@ export class App {
 
     // 创建小型圆柱体玩家 (一个格子大小)
     const playerGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.6, 32);
-    const playerMaterial = new THREE.MeshStandardMaterial({ 
+    const playerMaterial = new THREE.MeshBasicMaterial({ 
       color: 0xff6600,
-      roughness: 0.3,
-      metalness: 0.8
+      // roughness: 0.3,
+      // metalness: 0.8
     });
     this.player = new THREE.Mesh(playerGeometry, playerMaterial);
     this.player.position.set(0, 0.3, 0);
@@ -178,9 +178,10 @@ export class App {
     this.controls.getObject().lookAt(0, 0, 0);
 
     // 创建三个区域
-    this.createRegion('square', '区域A', 0xff6666, -6, 0, 3, 3);
-    this.createRegion('triangle', '区域B', 0x66ff66, 0, 0, 3, 3);
-    this.createRegion('circle', '区域C', 0x6666ff, 6, 0, 3, 3);
+    this.createRegion('square', '区域A', 0xdd6666, -6, 0, 3, 3);
+    this.createRegion('triangle', '区域B', 0xffff66, 0, 0, 3, 3);
+  // The color hex code for 区域B is: rgba(219, 255, 102, 1)
+    this.createRegion('circle', '区域C', 0x1166ff, 6, 0, 3, 3);
   }
 
   createRegion(type, name, color, x, z, width, height) {
@@ -212,12 +213,12 @@ export class App {
     }
     
     geometry = new THREE.ShapeGeometry(shape);
-    const material = new THREE.MeshStandardMaterial({
+    const material = new THREE.MeshBasicMaterial({
       color: color,
-      side: THREE.DoubleSide,
-      transparent: true,
-      opacity: 0.7,
-      roughness: 0.2
+      // side: THREE.DoubleSide,
+      // transparent: true,
+      // opacity: 0.7,
+      // roughness: 0.2
     });
     
     const region = new THREE.Mesh(geometry, material);
@@ -259,7 +260,7 @@ export class App {
     }
     
     if (region) {
-      region.material.color.setHex(0xffff00);
+      region.material.color.setHex(0xffffff);
       region.userData.highlighted = true;
       this.highlightedRegion = region;
     } else {
@@ -284,9 +285,9 @@ export class App {
     }[regionName];
     
     const planeGeometry = new THREE.PlaneGeometry(20, 20);
-    const planeMaterial = new THREE.MeshStandardMaterial({ 
+    const planeMaterial = new THREE.MeshBasicMaterial({ 
       color: sceneColor,
-      side: THREE.DoubleSide
+      // side: THREE.DoubleSide
     });
     const plane = new THREE.Mesh(planeGeometry, planeMaterial);
     plane.rotation.x = -Math.PI / 2;
@@ -294,11 +295,11 @@ export class App {
 
     // 退出区域
     const exitGeometry = new THREE.PlaneGeometry(3, 3);
-    const exitMaterial = new THREE.MeshStandardMaterial({ 
+    const exitMaterial = new THREE.MeshBasicMaterial({ 
       color: 0xff0000,
-      side: THREE.DoubleSide,
-      transparent: true,
-      opacity: 0.7
+      // side: THREE.DoubleSide,
+      // transparent: true,
+      // opacity: 0.7
     });
     this.exitZone = new THREE.Mesh(exitGeometry, exitMaterial);
     this.exitZone.rotation.x = -Math.PI / 2;
@@ -317,7 +318,7 @@ export class App {
       size: 1.5,
       height: 0.2,
     });
-    const textMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+    const textMaterial = new THREE.MeshBasicMaterial({ color: 0x333333 });
     const textMesh = new THREE.Mesh(textGeometry, textMaterial);
     textMesh.position.set(-3, 0.1, 0);
     this.scene.add(textMesh);
