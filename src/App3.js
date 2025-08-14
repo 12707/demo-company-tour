@@ -13,10 +13,15 @@ export class App3 {
         this.stats = null
         this.physics = null
         this.physicsHelper = null
+        this.player = null
+        this.chassis = null
+        this.characterController = null
+        this.movement = { forward: 0, right: 0 }
     }
 
     init() {
         this.setupScene()
+        this.setupEventListeners()
         this.setupControls()
         this.createObjects()
     }
@@ -74,8 +79,14 @@ export class App3 {
             ground.material.needsUpdate = true
         })
 
+        this.buildTransportRegion()
+
         this.stats = new Stats()
         document.getElementById('scene-container').appendChild(this.stats.dom)
+
+        this.setupPhysics()
+
+        this.onWindowResize()
     }
 
     async setupPhysics() {
@@ -83,14 +94,83 @@ export class App3 {
         this.physicsHelper = new RapierHelper(this.physics.world)
         this.scene.add(this.physicsHelper)
         this.physics.addScene(this.scene)
+        this.createCharacter()
+    }
 
+    createCharacter() {
+        const characterGeometry = new THREE.CapsuleGeometry(0.3, 1, 8, 8)
+        const characterMaterial = new THREE.MeshStandardMaterial({color: 0x0000ff})
+        this.player = new THREE.Mesh(characterGeometry, characterMaterial)
+        this.player.castShadow = true
+        this.player.position.set(0, 0.8, 0)
+        this.scene.add(this.player)
+
+        this.characterController = this.physics.world.createCharacterController(0.01)
+        this.characterController.setApplyImpulsesToDynamicBodies(true)
+        this.characterController.setCharacterMass(3)
+        const colliderDesc = this.physics.RAPIER.ColliderDesc.capsule(0.5, 0.3).setTranslation(0, 0.8, 0)
+        this.player.userData.collider = this.physics.world.createCollider(colliderDesc)
+    }
+
+    onWindowResize() {
+        this.camera.aspect = window.innerWidth / window.innerHeight
+        this.camera.updateProjectionMatrix()
+        this.renderer.setSize(window.innerWidth, window.innerHeight)
+    }
+
+    setupEventListeners() {
+        window.addEventListener('keydown', event => {
+            if ( event.key === 'w' || event.key === 'ArrowUp' ) this.movement.forward = 1;
+            if ( event.key === 's' || event.key === 'ArrowDown' ) this.movement.forward = - 1;
+            if ( event.key === 'a' || event.key === 'ArrowLeft' ) this.movement.right = - 1;
+            if ( event.key === 'd' || event.key === 'ArrowRight' ) this.movement.right = 1;
+        })
+        window.addEventListener('keyup', event => {
+            if ( event.key === 'w' || event.key === 's' || event.key === 'ArrowUp' || event.key === 'ArrowDown' ) this.movement.forward = 0;
+            if ( event.key === 'a' || event.key === 'd' || event.key === 'ArrowLeft' || event.key === 'ArrowRight' ) this.movement.right = 0;
+        })
+        window.addEventListener( 'resize', this.onWindowResize, false );
+    }
+
+    buildTransportRegion() {
+        const radius = 3
+        const shape = new THREE.Shape()
+        shape.absarc(0, 0, radius, 0, Math.PI * 2, false)
+        const geometry = new THREE.ShapeGeometry(shape)
+        const material = new THREE.MeshBasicMaterial({ color: 0x00ff00, side: THREE.DoubleSide })
+        const mesh = new THREE.Mesh(geometry, material)
+        mesh.rotation.x = - Math.PI / 2
+        mesh.position.set(10, 0, - 10)
+        this.scene.add(mesh)
     }
 
     animate() {
-        if (this.controls) {
-            this.controls.update()
+        if (this.physicsHelper) {
+            this.physicsHelper.update()
         }
         this.renderer.render(this.scene, this.camera)
+        if (this.characterController && this.physics) {
+            const deltaTime = 1 / 60;
+            // Character movement
+            const speed = 2.5 * deltaTime;
+            const moveVector = new this.physics.RAPIER.Vector3( this.movement.right * speed, 0, - this.movement.forward * speed );
+
+            this.characterController.computeColliderMovement( this.player.userData.collider, moveVector );
+
+            // Read the result.
+            const translation = this.characterController.computedMovement();
+            const position = this.player.userData.collider.translation();
+
+            position.x += translation.x;
+            position.y += translation.y;
+            position.z += translation.z;
+
+            this.player.userData.collider.setTranslation( position );
+
+            // Sync Three.js mesh with Rapier collider
+            this.player.position.set( position.x, position.y, position.z );
+        }
+        
         this.stats.update()
     }
 }
