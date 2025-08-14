@@ -1,0 +1,8 @@
+{
+  "compilerOptions": {
+    "baseUrl": "./",
+    "paths": {
+      "three/examples/jsm/*": ["node_modules/three/examples/jsm/*"]
+    }
+  }
+}
