@@ -5,7 +5,7 @@ import { RapierPhysics } from 'three/examples/jsm/Addons'
 import { RapierHelper } from 'three/examples/jsm/helpers/RapierHelper.js'
 import Stats from 'three/examples/jsm/libs/stats.module.js'
 
-export class App3 {
+export class App {
     constructor() {
         this.scene = new THREE.Scene()
         this.camera = new THREE.PerspectiveCamera(80, window.innerWidth / window.innerHeight, 0.1, 150)
