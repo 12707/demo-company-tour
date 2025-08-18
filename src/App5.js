@@ -1,8 +1,9 @@
 import * as THREE from 'three'
+import { texture } from 'three/tsl'
 
 export class App {
     constructor() {
-        // THREE.Cache.enabled = false; // Disable texture caching
+        THREE.Cache.enabled = false; // Disable texture caching
         this.scene = new THREE.Scene()
         this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 1100)
         this.renderer = new THREE.WebGLRenderer()
@@ -21,7 +22,7 @@ export class App {
         this.fnPointerMove = null
         this.fnPointerUp = null
         // this.panoramaName = 'panorama_demo_8.jpg'  // panorama_demo_2.jpeg, chalet_panorama.jpg, panorama_demo_6.jpg
-        this.panoramaNames = ['panorama_demo_8.jpg', 'panorama_demo_7.jpg', 'panorama_demo_6.jpg']
+        this.panoramaNames = ['panorama_demo_8.jpg', 'panorama_demo_7.jpg', 'panorama_demo_6.jpg', 'panorama_demo_5.jpg', 'panorama_demo_4.jpg']
         this.frameNames = ['frame_apngframe1.png', 'frame_apngframe2.png', 'frame_apngframe3.png']
         this.frameTextures = []
         this.currentFrameIndex = 0
@@ -29,15 +30,49 @@ export class App {
         this.mouse = new THREE.Vector2()
         this.panoramaIndex = 0
         this.textures = []
+        this.arrowClick = null
     }
 
     init() {
-        this.loadTextures()
+        this.panoramaIndex = 0
+        // this.loadTextures()
         this.setupScene()
         this.addEventListeners()
         // this.addHotpoints()
         this.addAccessory(50, -100, -80) // Add frames for animation
-        this.jumpToNextPanorama(1) // Add click event to jump to the next panorama
+        this.jumpToNextPanorama(this.init2) // Add click event to jump to the next panorama
+    }
+
+    init2() {
+        this.panoramaIndex = 1
+        this.setupScene()
+        this.addEventListeners()
+        this.addAccessory(90, -100, -80)
+        this.jumpToNextPanorama(this.init3)
+    }
+
+    init3() {
+        this.panoramaIndex = 2
+        this.setupScene()
+        this.addEventListeners()
+        this.addAccessory(90, -100, -80)
+        this.jumpToNextPanorama(this.init4)
+    }
+
+    init4() {
+        this.panoramaIndex = 3
+        this.setupScene()
+        this.addEventListeners()
+        this.addAccessory(90, -100, -80)
+        this.jumpToNextPanorama(this.init5)
+    }
+    
+    init5() {
+        this.panoramaIndex = 4
+        this.setupScene()
+        this.addEventListeners()
+        this.addAccessory(90, -100, -80)
+        this.jumpToNextPanorama(this.init)
     }
 
     setupScene() {
@@ -51,13 +86,13 @@ export class App {
         this.geometry = new THREE.SphereGeometry(500, 60, 40)
         this.geometry.scale(-1, 1, 1) // Invert the geometry to make it inside-out
 
-        // const texture = new THREE.TextureLoader().load(`/textures/${this.panoramaName}`)
-        // texture.colorSpace = THREE.SRGBColorSpace
-        const texture = this.getTexture(this.panoramaIndex)
-        if (!texture) {
-            console.error('Texture not found for index:', this.panoramaIndex)
-            return
-        }
+        const texture = new THREE.TextureLoader().load(`/textures/${this.panoramaNames[this.panoramaIndex]}`)
+        texture.colorSpace = THREE.SRGBColorSpace
+        // const texture = this.getTexture(this.panoramaIndex)
+        // if (!texture) {
+        //     console.error('Texture not found for index:', this.panoramaIndex)
+        //     return
+        // }
 
         const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide })
         const sphere = new THREE.Mesh(this.geometry, material)
@@ -136,6 +171,7 @@ export class App {
         const y = 500 * Math.cos(this.phi);
         const z = 500 * Math.sin(this.phi) * Math.sin(this.theta);
         this.camera.lookAt(x, y, z);
+        this.updateFramePosition()
         this.renderer.render(this.scene, this.camera); 
     }
 
@@ -156,6 +192,9 @@ export class App {
             while (this.scene.children.length > 0) {
                 const child = this.scene.children[0];
                 if (child.geometry) child.geometry.dispose();  
+                if (child.material.map) {
+                    child.material.map.dispose()
+                }
                 if (child.material) {
                     if (Array.isArray(child.material)) {
                         child.material.forEach(material => material.dispose()); 
@@ -165,6 +204,7 @@ export class App {
                 }
                 this.scene.remove(child);
             }
+            this.frameTextures = []
             this.objects = [];
             this.mouse = new THREE.Vector2()
         }           
@@ -178,22 +218,25 @@ export class App {
             sprite.material.map = currentTexture; // Update sprite material with the current frame
             sprite.material.needsUpdate = true; // Ensure the material updates
         }
-        // this.updateFramePosition(sprite); // Update the sprite position
     } 
     
-    updateFramePosition(sprite) {
-        const targetPosition = new THREE.Vector3(50, -150, -80); // Target position for the frame
+    updateFramePosition() {
+        const targetPosition = new THREE.Vector3(50, 0, -80); // Target position for the frame
         this.sphere.updateMatrixWorld(); // Ensure the sphere's world matrix is updated
         const wolrdLocation = targetPosition.applyMatrix4(this.sphere.matrixWorld); // Apply the geometry's world matrix to the target position
-        sprite.position.copy(wolrdLocation); // Update the sprite's position to the world location
-        // sprite.position.copy(targetPosition); // Update the sprite's position
+        // sprite.position.copy(wolrdLocation); // Update the sprite's position to the world location
+        // // sprite.position.copy(targetPosition); // Update the sprite's position
         // sprite.lookAt(new THREE.Vector3(sprite.position.x, sprite.position.y, sprite.position.z - 1)); // Make the sprite face the center of the sphere
+        this.objects.forEach(object => {
+            object.position.copy(wolrdLocation)
+            object.lookAt(targetPosition)
+        })
     }
 
     addAccessory(x, y, z) {
-        const TextureLoader = new THREE.TextureLoader();
+        // const textureLoader = new THREE.TextureLoader()
         this.frameNames.forEach(name => {
-            const texture = TextureLoader.load(`/textures/${name}?t=${Date.now()}`);
+            const texture = new THREE.TextureLoader().load(`/textures/${name}`);
             texture.colorSpace = THREE.SRGBColorSpace;
             this.frameTextures.push(texture);
         });
@@ -208,26 +251,36 @@ export class App {
         this.animateFrame(sprite); // Start the animation loop for the sprite frames
     }
 
-    jumpToNextPanorama(panoramaIndex) {
+    jumpToNextPanorama(nextSceneInit) {
         this.raycaster = new THREE.Raycaster();
         const container = document.getElementById('scene-container')
-        container.addEventListener('click', (event) => {
+        this.arrowClick = (event) => {
+            console.log(`ClientX[${event.clientX}, ClientY[${event.clientY}], 
+                innerW[${window.innerWidth}], innerH[${window.innerHeight}]`)
             this.mouse.x = (event.clientX / window.innerWidth) * 2 - 1
-            this.mouse.y = (event.clientY / window.innerHeight) * 2 - 1
+            this.mouse.y = - (event.clientY / window.innerHeight) * 2 + 1
+            console.log(`mouseX[${this.mouse.x}], mouseY[${this.mouse.y}]`)
             this.raycaster.setFromCamera(this.mouse, this.camera)
-            this.raycaster.params.Sprite.threshold = 2.0; // Set threshold for raycasting
+            this.raycaster.params.Sprite.threshold = 10; // Set threshold for raycasting
             const intersects = this.raycaster.intersectObjects(this.objects, true)
             if (intersects.length > 0) {
                 const intersectedObject = intersects[0].object;
+                
                 console.log(`You clicked on: ${intersectedObject.position.x}, ${intersectedObject.position.y}, ${intersectedObject.position.z}`);
                 this.clearScene(); // Clear the scene after interaction
-                this.panoramaIndex = panoramaIndex; // Change to the next panorama
-                this.setupScene()
-                this.addEventListeners()
-                this.addAccessory(100, -100, -80) // Add frames for animation
-                this.jumpToNextPanorama((this.panoramaNames.length - 1) == panoramaIndex ? 0 : 2); // Set up the next panorama jump
+                if (nextSceneInit) {
+                    container.removeEventListener('click', this.arrowClick)
+                    nextSceneInit.apply(this)
+                    // nextSceneInit.bind(this)()
+                }
+                // this.panoramaIndex++ // Change to the next panorama
+                // this.setupScene()
+                // this.addEventListeners()
+                // //this.addAccessory(100, -100, -80) // Add frames for animation
+                // this.jumpToNextPanorama(); // Set up the next panorama jump
             }
-        })
+        }
+        container.addEventListener('click', this.arrowClick)
     }
 
     addHotpoints() {
