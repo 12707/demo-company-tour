@@ -174,8 +174,8 @@ export class App {
     this.scene.add(this.player);
     
     // 设置控制器位置
-    this.controls.getObject().position.set(0, 1.6, 5);
-    this.controls.getObject().lookAt(0, 0, 0);
+    this.controls.object.position.set(0, 1.6, 5);
+    this.controls.object.lookAt(0, 0, 0);
 
     // 创建三个区域
     this.createRegion('square', '区域A', 0xdd6666, -6, 0, 3, 3);
@@ -324,8 +324,8 @@ export class App {
     this.scene.add(textMesh);
     
     this.player.position.set(0, 0.3, 0);
-    this.controls.getObject().position.set(0, 1.6, 5);
-    this.controls.getObject().lookAt(0, 0, 0);
+    this.controls.object.position.set(0, 1.6, 5);
+    this.controls.object.lookAt(0, 0, 0);
   }
 
   checkPlayerInRegion() {
@@ -379,7 +379,7 @@ export class App {
       this.controls.moveRight(-this.velocity.x * delta);
       this.controls.moveForward(-this.velocity.z * delta);
       
-      this.player.position.copy(this.controls.getObject().position);
+      this.player.position.copy(this.controls.object.position);
       this.player.position.y = 0.3;
       
       this.checkPlayerInRegion();
