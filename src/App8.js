@@ -13,11 +13,16 @@ export class App {
         this.mouse = new THREE.Vector2()
         this.highlightMesh = null
         this.lineMaterial = null
+        this.roomExitArrowMesh = null
         this.moveTarget = null
         this.moveForward = false
         this.moveBackward = false
         this.moveLeft = false
         this.moveRight = false
+        this.fnMapClickHook = null
+        this.fnHighlightMouseOverHook = null
+        this.fnHighlightClickHook = null
+        this.fnRoomExitClickHook = null
     }
 
     init() {
@@ -27,11 +32,22 @@ export class App {
         this.animate()
     }
 
+    init2() {
+        this.setupScene2()
+        this.redner2()
+        this.setupEventListeners2()
+        this.animate()
+    }
+
     setupScene() {
         this.renderer.setSize(window.innerWidth, window.innerHeight)
         this.container.appendChild(this.renderer.domElement)
         this.camera.position.set(0, 0, 95)
         this.camera.lookAt(new THREE.Vector3(0, 0, 0))
+    }
+
+    setupScene2() {
+        this.camera.position.set(0, -10, 100)
     }
 
     setupEventListeners() {
@@ -47,20 +63,6 @@ export class App {
             } else if (event.code === 'ShiftLeft') {
                 this.walkSpeed = 0.8
             }
-            // const newPosition = this.playerMesh.position.clone()
-            // if ( event.key === 'w' || event.key === 'ArrowUp' ) {
-            //     newPosition.y += 1
-            // }
-            // if ( event.key === 's' || event.key === 'ArrowDown' ) {
-            //     newPosition.y -= 1
-            // }
-            // if ( event.key === 'a' || event.key === 'ArrowLeft' ) {
-            //     newPosition.x -= 1
-            // }
-            // if ( event.key === 'd' || event.key === 'ArrowRight' ) {
-            //     newPosition.x += 1
-            // }
-            // this.moveTarget = newPosition
         })
 
         document.addEventListener('keyup', (event) => {
@@ -78,41 +80,69 @@ export class App {
             
         })
 
-        document.addEventListener('click', (event) => {
-            // this.mouse.x = (event.clientX / window.innerWidth) * 2 - 1
-            // this.mouse.y = -((event.clientY / window.innerHeight) * 2 - 1)
-            // this.raycaster.setFromCamera(this.mouse, this.camera)
+        this.fnMapClickHook = (event) => {
             this.mouse = this.calcMouse(event)
             this.setupRaycaster(this.mouse)
             const intersects = this.raycaster.intersectObject(this.mapMesh)
             if (intersects.length > 0) {
                 this.moveTarget = intersects[0].point
             }
-        })
+        }
+        document.addEventListener('click', this.fnMapClickHook)
 
-        document.addEventListener('mouseover', event => {
+        this.fnHighlightMouseOverHook = (event) => {
             this.mouse = this.calcMouse(event)
             this.setupRaycaster(this.mouse)
             const intersects = this.raycaster.intersectObject(this.highlightMesh)
             if (intersects.length > 0) {
                 this.lineMaterial.color.set(0xffff00)
                 this.lineMaterial.opacity = 100
-                document.body.style.cursor = 'pointer'
+                // document.body.style.cursor = 'pointer'
             } else {
                 this.lineMaterial.color.set(0xffffff)
                 this.lineMaterial.opacity = 0
-                document.body.style.cursor = 'default'
+                // document.body.style.cursor = 'default'
             }
-        })
+        }
+        document.addEventListener('mouseover', this.fnHighlightMouseOverHook)
 
-        document.addEventListener('click', event => {
+        this.fnHighlightClickHook = (event) => {
             this.mouse = this.calcMouse(event)
             this.setupRaycaster(this.mouse)
             const intersects = this.raycaster.intersectObject(this.highlightMesh)
             if (intersects.length > 0) {
                 console.log('The highlight region is clicked!')
+                this.clearScene()
+                this.removeEventListeners()
+                this.init2()
             }
-        })
+        }
+        document.addEventListener('click', this.fnHighlightClickHook)
+    }
+
+    setupEventListeners2() {
+        this.fnRoomExitClickHook = (event) => {
+            this.mouse = this.calcMouse(event)
+            this.setupRaycaster(this.mouse)
+            const intersects = this.raycaster.intersectObject(this.roomExitArrowMesh)
+            if (intersects.length > 0) {
+                console.log('The exit arrow is clicked!')
+                this.clearScene()
+                this.removeEventListeners2()
+                this.init()
+            }
+        }
+        document.addEventListener('click', this.fnRoomExitClickHook)
+    }
+
+    removeEventListeners() {
+        document.removeEventListener('click', this.fnMapClickHook)
+        document.removeEventListener('mouseover', this.fnHighlightMouseOverHook)
+        document.removeEventListener('click', this.fnHighlightClickHook)
+    }
+
+    removeEventListeners2() {
+        document.removeEventListener('click', this.fnRoomExitClickHook)
     }
 
     render() {
@@ -121,37 +151,20 @@ export class App {
         this.addPlayer()
     }
 
+    redner2() {
+        this.addMap2()
+        this.addExitSign()
+        this.addBlock()
+        this.addPlayer()
+    }
+
     animate() {
         requestAnimationFrame(() => this.animate())
-
         const direction = this.getDirectionVector()
         if (direction.length() > 0) {
+            console.log(`current player's position: ${this.playerMesh.position.x}, ${this.playerMesh.position.y}, ${this.playerMesh.position.z}`)
             this.playerMesh.position.add(direction.multiplyScalar(this.walkSpeed))
         }
-
-        // if (this.moveTarget) {
-        //     // const lerpSpeed = 0.3
-        //     // this.playerMesh.position.lerp(this.moveTarget, lerpSpeed)
-        //     // if (this.playerMesh.position.distanceTo(this.moveTarget) < lerpSpeed) {
-        //     //     this.moveTarget = null
-        //     //     this.playerMesh.position.copy(this.moveTarget)
-        //     // }
-        //     const delta = new THREE.Vector3(
-        //         this.moveTarget.x - this.playerMesh.position.x,
-        //         this.moveTarget.y - this.playerMesh.position.y,
-        //         0
-        //     )
-        //     if (delta.length() < 0.1) {
-        //         if (this.playerMesh) {
-        //             this.playerMesh.position.copy(this.moveTarget)
-        //         }
-        //         this.moveTarget = null
-        //     } else {
-        //         delta.normalize()
-        //         const step = Math.min(delta.length(), this.walkSpeed)
-        //         this.playerMesh.position.add(delta.multiplyScalar(step))
-        //     }
-        // }
 
         this.renderer.render(this.scene, this.camera)
     }
@@ -164,6 +177,27 @@ export class App {
         const mapMaterial = new THREE.MeshBasicMaterial({map: mapTexture})
         this.mapMesh = new THREE.Mesh(mapGeometry, mapMaterial)
         this.scene.add(this.mapMesh)
+    }
+
+    addMap2() {
+        const textureLoader = new THREE.TextureLoader()
+        const mapTexture = textureLoader.load('/textures/room.jpg')
+        mapTexture.colorSpace = THREE.SRGBColorSpace
+        const mapGeometry = new THREE.PlaneGeometry(300, 180)
+        const mapMaterial = new THREE.MeshBasicMaterial({map: mapTexture})
+        this.mapMesh = new THREE.Mesh(mapGeometry, mapMaterial)
+        this.scene.add(this.mapMesh)
+    }
+
+    addExitSign() {
+        const textureLoader = new THREE.TextureLoader()
+        const exitArrowTexture = textureLoader.load('/textures/arrowdown.png')
+        exitArrowTexture.colorSpace = THREE.SRGBColorSpace
+        const exitArrowGeometry = new THREE.PlaneGeometry(4, 8)
+        const exitArrowMaterial = new THREE.MeshBasicMaterial({map: exitArrowTexture, transparent: true})
+        this.roomExitArrowMesh = new THREE.Mesh(exitArrowGeometry, exitArrowMaterial)
+        this.roomExitArrowMesh.position.set(-38, -50, 0)
+        this.scene.add(this.roomExitArrowMesh)
     }
 
     addHighlightRegion() {
@@ -187,7 +221,7 @@ export class App {
         const textureLoader = new THREE.TextureLoader()
         const playerTexture = textureLoader.load('/textures/male0.png')
         playerTexture.colorSpace = THREE.SRGBColorSpace
-        const playerGeometry = new THREE.PlaneGeometry(6, 12)
+        const playerGeometry = new THREE.PlaneGeometry(10, 18)
         const palyerMaterial = new THREE.MeshBasicMaterial({map: playerTexture, transparent: true})
         this.playerMesh = new THREE.Mesh(playerGeometry, palyerMaterial)
         this.playerMesh.position.set(0, 0, 1)
@@ -217,5 +251,41 @@ export class App {
         }
 
         return direction
+    }
+
+    clearScene() {
+        if (this.scene) {
+            while (this.scene.children.length > 0) {
+                const child = this.scene.children[0];
+                if (child.geometry) child.geometry.dispose();  
+                if (child.material.map) {
+                    child.material.map.dispose()
+                }
+                if (child.material) {
+                    if (Array.isArray(child.material)) {
+                        child.material.forEach(material => material.dispose()); 
+                    } else {            
+                        child.material.dispose();
+                    }       
+                }
+                this.scene.remove(child);
+            }
+            this.mouse = new THREE.Vector2()
+        } 
+    }
+
+    createShape() {
+        const shape = new THREE.Shape()
+        shape.absarc(0, 0, 10, 0, Math.PI * 2, false)
+        return shape
+    }
+
+    addBlock() {
+        const shape = this.createShape()
+        const shapeGeometry = new THREE.ShapeGeometry(shape)
+        const shapeMaterial = new THREE.MeshBasicMaterial({ color: 'gray' })
+        const block = new THREE.Mesh(shapeGeometry, shapeMaterial)
+        block.position.set(-18, -20, 2)
+        this.scene.add(block)
     }
 }
