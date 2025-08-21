@@ -23,6 +23,19 @@ export class App {
         this.fnHighlightMouseOverHook = null
         this.fnHighlightClickHook = null
         this.fnRoomExitClickHook = null
+        this.moveableAreas = [
+            // entrance main path
+            { type: 'rectangle', x1: -11.60, y1: 1.6, x2: 14.82, y2: -45.62 }, 
+            { type: 'rectangle', x1: -14.35, y1: -45.62, x2: -3.69, y2: -65.94 }, 
+            { type: 'rectangle', x1: 4.00, y1: -45.62, x2: 14.35, y2: -65.15 }, 
+            { type: 'rectangle', x1: 14.35, y1: -59.19, x2: 23.00, y2: -65.15 }, 
+            { type: 'rectangle', x1: -22.31, y1: -59.10, x2: -14.35, y2: -65.15 }, 
+            // center circle path
+            { type: 'rectangle', x1: -11.60, y1: 15.6, x2: 14.82, y2: -45.62 }, 
+            // { type: 'circle', x: 0, y: 38.40, radius: 23.6 },
+            { type: 'ellipsRing', x: -0.4, y: 32.80, innerLongRadius: 32.6, outerLongRadius: 46, innerShortRadius: 18, outerShortRadius: 24 },
+            
+        ]
     }
 
     init() {
@@ -60,7 +73,9 @@ export class App {
                 this.moveLeft = true
             } else if ( event.key === 'd' || event.key === 'ArrowRight' ) {
                 this.moveRight = true
-            } else if (event.code === 'ShiftLeft') {
+            } 
+
+            if (event.code === 'ShiftLeft') {
                 this.walkSpeed = 0.8
             }
         })
@@ -74,7 +89,9 @@ export class App {
                 this.moveLeft = false
             } else if ( event.key === 'd' || event.key === 'ArrowRight' ) {
                 this.moveRight = false
-            } else if (event.code === 'ShiftLeft') {
+            } 
+            
+            if (event.code === 'ShiftLeft') {
                 this.walkSpeed = 0.4
             }
             
@@ -163,7 +180,15 @@ export class App {
         const direction = this.getDirectionVector()
         if (direction.length() > 0) {
             console.log(`current player's position: ${this.playerMesh.position.x}, ${this.playerMesh.position.y}, ${this.playerMesh.position.z}`)
-            this.playerMesh.position.add(direction.multiplyScalar(this.walkSpeed))
+            const tempPosition = this.playerMesh.position.clone().add(direction.multiplyScalar(this.walkSpeed))
+            const isMoveable = this.isMoveableArea(tempPosition.x, tempPosition.y)
+            if (isMoveable) {
+            // if (true) {
+                this.playerMesh.position.copy(tempPosition)
+            } else {
+                console.log('Blocked by a non-moveable area')
+            }
+            // this.playerMesh.position.add(direction.multiplyScalar(this.walkSpeed))
         }
 
         this.renderer.render(this.scene, this.camera)
@@ -287,5 +312,38 @@ export class App {
         const block = new THREE.Mesh(shapeGeometry, shapeMaterial)
         block.position.set(-18, -20, 2)
         this.scene.add(block)
+    }
+
+    isMoveableArea(x, y) {
+        for (const area of this.moveableAreas) {
+            if (area.type === 'rectangle') {
+                if (x >= area.x1 && x <= area.x2 && y <= area.y1 && y >= area.y2) {
+                    return true
+                }
+            } else if (area.type === 'circle') {
+                const radius = area.radius
+                const centerX = area.x
+                const centerY = area.y
+                if (Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2) <= Math.pow(radius, 2)) {
+                    return true
+                }
+            } else if (area.type === 'ellipsRing') {
+                const innerLongRadius = area.innerLongRadius
+                const outerLongRadius = area.outerLongRadius
+                const innerShortRadius = area.innerShortRadius
+                const outerShortRadius = area.outerShortRadius
+                const centerX = area.x
+                const centerY = area.y
+                // const innerThreshold = ((innerLongRadius / outerLongRadius) * (innerShortRadius / outerShortRadius))
+                const innerThreshold = Math.pow(innerShortRadius / outerShortRadius, 2)
+                const outerThreshold = 1
+                const normalizedValue = Math.sqrt(Math.pow(x - centerX, 2) / Math.pow(outerLongRadius, 2) + Math.pow(y - centerY, 2) / Math.pow(outerShortRadius, 2))
+                if (normalizedValue >= innerThreshold && normalizedValue <= outerThreshold) {
+                    return true
+                }
+            }
+            // Additional area types can be added here
+        }
+        return false
     }
 }
