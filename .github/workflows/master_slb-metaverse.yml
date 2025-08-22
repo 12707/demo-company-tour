@@ -52,4 +52,4 @@ jobs:
           app-name: 'slb-metaverse'
           slot-name: 'Production'
           package: .
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_89C5BF0D85D0432C99A841D1D0FFE0F7 }}
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_67222C160D8A48BAAA19794F370CB5D6 }}
