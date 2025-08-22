@@ -1,4 +1,4 @@
-import { App } from './App5.js';
+import { App } from './App8.js';
 
 const app = new App();
 app.init();
