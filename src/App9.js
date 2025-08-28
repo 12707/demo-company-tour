@@ -1,13 +1,20 @@
 import * as THREE from 'three'
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import { RapierPhysics } from 'three/examples/jsm/Addons'
+import { RapierHelper } from 'three/examples/jsm/helpers/RapierHelper.js'
 export class App {
     constructor() {
         this.container = document.getElementById('scene-container');
+        this.orbitControls = null
+        this.physics = null
+        this.physicsHelper = null
+        this.playerController = null
         this.scene = new THREE.Scene()
         this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 100)
         this.renderer = new THREE.WebGLRenderer()
         this.mapMesh = null
         this.playerMesh = null
-        this.walkSpeed = 0.3
+        this.walkSpeed = 0.4
         this.raycaster = new THREE.Raycaster()
         this.mouse = new THREE.Vector2()
         this.highlightMesh = null
@@ -22,8 +29,6 @@ export class App {
         this.fnHighlightMouseOverHook = null
         this.fnHighlightClickHook = null
         this.fnRoomExitClickHook = null
-        this.isClickMove = false
-        this.clickPoint = new THREE.Vector3()
         this.moveableAreas = null
         this.gateMesh = null
         this.borderMaterial = null
@@ -31,69 +36,65 @@ export class App {
         this.slbMesh = null
         this.fnSLBClickHook = null
         this.roomLogoBorder = null
-        this.fnAutoExitRoomHook = null
-        this.fnAutoEnterRoomHook = null
-        this.fnMouseMoveHook = null
-        this.fnMouseMoveStopHook = null
-        this.moveableAreas = []
-        this.transportAreas = []
-        this.palyerMaterial = null
-        this.playerFrontTexture = new THREE.TextureLoader().load('/textures/male1.png')
-        this.playerFrontTexture.colorSpace = THREE.SRGBColorSpace
-        this.playerBackTexture = new THREE.TextureLoader().load('/textures/male_back.png')
-        this.playerBackTexture.colorSpace = THREE.SRGBColorSpace
-        this.playerLeftTexture = new THREE.TextureLoader().load('/textures/male_left.png')
-        this.playerLeftTexture.colorSpace = THREE.SRGBColorSpace
-        this.playerRigthTexture = new THREE.TextureLoader().load('/textures/male_right.png')
-        this.playerRigthTexture.colorSpace = THREE.SRGBColorSpace
     }
 
     init() {
         this.setupScene()
         this.render()
+        this.setupPhysics()
         this.setupEventListeners()
-        this.animate()
+        // this.animate()
     }
 
     init2() {
         this.setupScene2()
         this.redner2()
         this.setupEventListeners2()
-        this.animate()
+        this.setupClickableSLB()
+        // this.animate()
     }
 
     setupScene() {
+        this.renderer.setPixelRatio(window.devicePixelRatio)
         this.renderer.setSize(window.innerWidth, window.innerHeight)
+        this.renderer.shadowMap.enabled = true
         this.container.appendChild(this.renderer.domElement)
         this.camera.position.set(0, 0, 95)
         this.camera.lookAt(new THREE.Vector3(0, 0, 0))
+        this.renderer.setAnimationLoop(() => this.animateForPhysicsWorld())
     }
 
     setupScene2() {
         this.camera.position.set(0, -10, 100)
     }
+    setupClickableSLB() {
+        this.fnSLBClickHook = (event) => {
+            this.mouse = this.calcMouse(event);
+            this.setupRaycaster(this.mouse);
+
+            const intersects = this.raycaster.intersectObject(this.slbMesh);
+            if (intersects.length > 0) {
+                this.showSLBPopup();
+            }
+        }
+        document.addEventListener('click', this.fnSLBClickHook);
+    }
 
     setupEventListeners() {
         document.addEventListener('keydown', (event) => {
             if ( event.key === 'w' || event.key === 'W' || event.key === 'ArrowUp' ) {
-                this.palyerMaterial.map = this.playerBackTexture
                 this.moveForward = true
             } else if ( event.key === 's' || event.key === 'S' || event.key === 'ArrowDown' ) {
-                this.palyerMaterial.map = this.playerFrontTexture
                 this.moveBackward = true
             } else if ( event.key === 'a' || event.key === 'A' || event.key === 'ArrowLeft' ) {
-                this.palyerMaterial.map = this.playerLeftTexture
                 this.moveLeft = true
             } else if ( event.key === 'd' || event.key === 'D' || event.key === 'ArrowRight' ) {
-                this.palyerMaterial.map = this.playerRigthTexture
                 this.moveRight = true
             } 
 
-            console.log(`event code: ${event.code}, event key: ${event.key}, event shiftKey: ${event.shiftKey}`)
-
-            // if (event.code === 'ShiftLeft') {
-            //     this.walkSpeed = 0.8
-            // }
+            if (event.code === 'ShiftLeft') {
+                this.walkSpeed = 0.8
+            }
         })
 
         document.addEventListener('keyup', (event) => {
@@ -107,48 +108,11 @@ export class App {
                 this.moveRight = false
             } 
             
-            // if (event.code === 'ShiftLeft') {
-            //     this.walkSpeed = 0.4
-            // }
-        })
-
-        this.fnMouseMoveHook = (event) => {
-            this.mouse = this.calcMouse(event)
-            this.setupRaycaster(this.mouse)
-            const intersects = this.raycaster.intersectObject(this.mapMesh)
-            if (intersects.length > 0) {
-                if (event.type === 'mousedown') {
-                    this.isClickMove = true
-                }
-                this.clickPoint = intersects[0].point
-                // console.log(`isClickMove: ${this.isClickMove},mouse click x: ${intersects[0].point.x}, mouse click y: ${intersects[0].point.y}, mouse click z: ${intersects[0].point.z}`)
+            if (event.code === 'ShiftLeft') {
+                this.walkSpeed = 0.4
             }
             
-        }
-        document.addEventListener('mousedown', this.fnMouseMoveHook)
-        document.addEventListener('mousemove', this.fnMouseMoveHook)
-
-        this.fnMouseMoveStopHook = (event) => {
-            this.isClickMove = false
-            this.moveForward = false
-            this.moveBackward = false
-            this.moveLeft = false
-            this.moveRight = false
-            this.clickPoint = new THREE.Vector3()
-        }
-        document.addEventListener('mouseup', this.fnMouseMoveStopHook)
-
-        this.fnAutoEnterRoomHook = (event) => {
-            const position = this.playerMesh.position.clone()
-            if (this.isTransportArea(position.x, position.y)) {
-                console.log('The enter room is clicked!')
-                this.clearScene()
-                this.removeEventListeners()
-                this.init2()
-            }
-        }
-        document.addEventListener('keydown', this.fnAutoEnterRoomHook)
-        document.addEventListener('mousedown', this.fnAutoEnterRoomHook)
+        })
 
         this.fnMapClickHook = (event) => {
             this.mouse = this.calcMouse(event)
@@ -202,61 +166,54 @@ export class App {
                 this.init()
             }
         }
-
         document.addEventListener('click', this.fnRoomExitClickHook)
-
-        this.fnSLBClickHook = (event) => {
-            this.mouse = this.calcMouse(event);
-            this.setupRaycaster(this.mouse);
-
-            const intersects = this.raycaster.intersectObject(this.slbMesh);
-            if (intersects.length > 0) {
-                this.showSLBPopup();
-            }
-        }
-        document.addEventListener('click', this.fnSLBClickHook);
-
-        this.fnAutoExitRoomHook = (event) => {
-            const position = this.playerMesh.position.clone()
-            if (this.isTransportArea(position.x, position.y)) {
-                this.clearScene()
-                this.removeEventListeners2()
-                this.init()
-            }
-        }
-
-        document.addEventListener('keydown', this.fnAutoExitRoomHook)
-        document.addEventListener('mousedown', this.fnAutoExitRoomHook)
     }
 
     removeEventListeners() {
         document.removeEventListener('click', this.fnMapClickHook)
         document.removeEventListener('mouseover', this.fnHighlightMouseOverHook)
         document.removeEventListener('click', this.fnHighlightClickHook)
-        document.removeEventListener('keydown', this.fnAutoEnterRoomHook)
-        document.removeEventListener('mousedown', this.fnAutoEnterRoomHook)
     }
 
     removeEventListeners2() {
         document.removeEventListener('click', this.fnRoomExitClickHook)
-        document.removeEventListener('click', this.fnSLBClickHook)
-        document.removeEventListener('keydown', this.fnAutoExitRoomHook)
-        document.removeEventListener('mousedown', this.fnAutoExitRoomHook)
+    }
+
+    setupControls() {
+        this.orbitControls = new OrbitControls(this.camera, this.renderer.domElement)
+        this.orbitControls.target = new THREE.Vector3(0, 2, 0)
+        this.orbitControls.update()
+    }
+
+    async setupPhysics() {
+        this.physics = await RapierPhysics()
+        this.physicsHelper = new RapierHelper(this.physics.world)
+        this.scene.add(this.physicsHelper)
+        this.physics.addScene(this.scene)
+        this.addCharacterController()
+    }
+
+    addCharacterController() {
+        this.playerController = this.physics.world.createCharacterController(0.01)
+        this.playerController.setApplyImpulsesToDynamicBodies(true)
+        this.playerController.setCharacterMass(3)
+        const colliderDesc = this.physics.RAPIER.ColliderDesc.cylinder(5, 5).setTranslation(10, 8, 1)
+        // const colliderDesc = this.physics.RAPIER.ColliderDesc.cylinder(6, 4)
+        this.playerMesh.userData.collider = this.physics.world.createCollider(colliderDesc)
     }
 
     render() {
         this.addMap()
+        // this.addBoxMap()
+        this.addBuilding()
         this.addMoveableAreas()
-        this.addTransportAreas()
         this.addHighlightRegion()
-        // this.addPlayer(-8.87, -15.66)
-        this.addPlayer(3.11, -24.84)
+        this.addPlayer(-8.87, -15.66)
     }
 
     redner2() {
         this.addMap2()
         this.addMoveableAreas2()
-        this.addTransportAreas2()
         this.addExitSign()
         // this.addBlock()
         this.addClickableSLB()
@@ -266,9 +223,8 @@ export class App {
     }
 
     animate() {
-        // console.log(`walk speed: ${this.walkSpeed}`)
         requestAnimationFrame(() => this.animate())
-        this.calcMouseClickMovementDirection()
+        
         const direction = this.getDirectionVector()
         if (direction.length() > 0) {
             console.log(`current player's position: ${this.playerMesh.position.x}, ${this.playerMesh.position.y}, ${this.playerMesh.position.z}`)
@@ -286,6 +242,29 @@ export class App {
         this.renderer.render(this.scene, this.camera)
     }
 
+    animateForPhysicsWorld() {
+        if (this.physicsHelper) {
+            this.physicsHelper.update()
+        }
+
+        this.renderer.render(this.scene, this.camera)
+
+        if (this.playerController && this.physics) {
+            const delta = 1 / 15
+            const speed = 10 * delta
+            const direction = this.getDirectionVector()
+            const moveVector = new this.physics.RAPIER.Vector3(direction.x * speed, direction.y * speed, 0)
+            this.playerController.computeColliderMovement(this.playerMesh.userData.collider, moveVector)
+            const translation = this.playerController.computedMovement()
+            const position = this.playerMesh.userData.collider.translation()
+            position.x += translation.x;
+            position.y += translation.y;
+            position.z += translation.z;
+            this.playerMesh.userData.collider.setTranslation(position)
+            this.playerMesh.position.set(position.x, position.y, position.z)
+        }
+    }
+
     addMap() {
         const textureLoader = new THREE.TextureLoader()
         // const mapTexture = textureLoader.load('/textures/hub.jpg')
@@ -293,9 +272,42 @@ export class App {
         const mapTexture = textureLoader.load('/textures/hub6.png')
         mapTexture.colorSpace = THREE.SRGBColorSpace
         const mapGeometry = new THREE.PlaneGeometry(300, 150)
-        const mapMaterial = new THREE.MeshBasicMaterial({map: mapTexture})
+        const mapMaterial = new THREE.MeshBasicMaterial({ map: mapTexture })
         this.mapMesh = new THREE.Mesh(mapGeometry, mapMaterial)
+        this.mapMesh.receiveShadow = true
+        this.mapMesh.userData.physics = { mass: 0 }
         this.scene.add(this.mapMesh)
+    }
+
+    addBoxMap() {
+        const textureLoader = new THREE.TextureLoader()
+        const mapTexture = textureLoader.load('/textures/hub6.png')
+        mapTexture.colorSpace = THREE.SRGBColorSpace
+        const geometry = new THREE.BoxGeometry(100, 0.5, 100)
+        const material = new THREE.MeshBasicMaterial({map: mapTexture, color: 0xffffff})
+        this.mapMesh = new THREE.Mesh(geometry, material)
+        this.mapMesh.receiveShadow = true
+        this.mapMesh.position.set(0, 25, 0)
+        this.mapMesh.userData.physics = { mass: 0 }
+        this.scene.add(this.mapMesh)
+
+        new THREE.TextureLoader().load('/texture/grid.png', (texture) => {
+            texture.wrapS = THREE.RepeatWrapping
+            texture.wrapT = THREE.RepeatWrapping
+            texture.repeat.set(80, 80)
+            this.mapMesh.material.map = texture
+            this.mapMesh.material.needsUpdate = true
+        })
+    }
+
+    addBuilding() {
+        const geogetry = new THREE.BoxGeometry(5, 5, 5) 
+        // const geogetry = new THREE.PlaneGeometry(5, 5)
+        const material = new THREE.MeshBasicMaterial({ color: 0x11ee00, transparent:true })
+        const mesh = new THREE.Mesh(geogetry, material)
+        mesh.position.set(20, -30, 1)
+        mesh.userData.physics = { mass: 0, restitution: 0}
+        this.scene.add(mesh)
     }
 
     addMap2() {
@@ -320,7 +332,6 @@ export class App {
         this.roomExitArrowMesh.position.set(-30, -50, 0)
         this.scene.add(this.roomExitArrowMesh)
     }
-
     addGate() {
         const textureLoader = new THREE.TextureLoader();
 
@@ -346,7 +357,6 @@ export class App {
         // Store reference for future interactions
         this.gateMesh = gateMesh;
     }
-
     addClickableSLB() {
         const topWidth = 20;  // Width of the top edge
         const bottomWidth = 20; // Width of the bottom edge
@@ -535,11 +545,11 @@ export class App {
     // Create geometry for the hoverable area
     const planeGeometry = new THREE.PlaneGeometry(300, 180);
 
-    // Create a material for the gate
-    const pictureMaterial = new THREE.MeshBasicMaterial({
-        map: roomLogoDefault,
-        transparent: true,             // Enable transparency
-    });
+        // Create a material for the gate
+        const pictureMaterial = new THREE.MeshBasicMaterial({
+            map: roomLogoDefault,
+            transparent: true,             // Enable transparency
+        });
     const logoMesh = new THREE.Mesh(planeGeometry, pictureMaterial);
     logoMesh.position.set(0, 0, 0)
     this.scene.add(logoMesh);
@@ -569,119 +579,7 @@ export class App {
             pictureMaterial.needsUpdate = true
         }
     })
-
-    document.addEventListener('click', (event) => {
-        const intersects = raycaster.intersectObject(hoverMesh);
-        if (intersects.length > 0) {
-            this.showLogoPopup();
-        }
-    })
 }
-
-    showLogoPopup() {
-        // Create a popup element if it doesn't already exist
-        let popup = document.getElementById('logo-popup');
-        if (!popup) {
-            popup = document.createElement('div');
-            popup.id = 'logo-popup';
-            popup.style.position = 'fixed';
-            popup.style.left = '50%';
-            popup.style.top = '50%';
-            popup.style.transform = 'translate(-50%, -50%)';
-            popup.style.background = 'white';
-            popup.style.color = '#333';
-            popup.style.padding = '0';
-            popup.style.border = 'none';
-            popup.style.zIndex = 1000;
-            popup.style.borderRadius = '16px';
-            popup.style.boxShadow = '0px 8px 24px rgba(0, 20, 220, 0.2)';
-            popup.style.fontFamily = 'Arial, sans-serif';
-            popup.style.width = '90%';
-            popup.style.maxWidth = '800px';
-            popup.style.height = '80vh';
-            popup.style.maxHeight = '600px';
-            popup.style.overflow = 'hidden';
-            popup.style.display = 'flex';
-            popup.style.flexDirection = 'column';
-
-            // Company images array
-            const companyImages = [
-                // { src: 'https://www.slb.com/-/media/images/home-page-2022/about/for-a-balanced-planet/for-a-balanced-planet-card.jpg', title: '构建和谐地球家园' },
-                // { src: 'https://www.slb.com/-/media/images/home-page-2022/geoenergy/geoenergy-card.jpeg', title: '道德与合规' },
-                // { src: 'https://www.slb.com/-/media/images/about-us/who-we-are/our-tech-development/our_tech_development_promo.jpg', title: '我们的技术发展' },
-                // { src: 'https://www.slb.com/-/media/images/insights/insights-articles/insights-category-pages/insights-landing-page-card.jpg', title: '洞察见解' },
-                { src: '/company/for-a-balanced-planet-card.jpg', title: '构建和谐地球家园' },
-                { src: '/company/geoenergy-card.jpeg', title: '道德与合规' },
-                { src: '/company/our_tech_development_promo.jpg', title: '我们的技术发展' },
-                { src: '/company/insights-landing-page-card.jpg', title: '洞察见解' },
-            ];
-
-            popup.innerHTML = `
-                <div style="position: relative; height: 100%; display: flex; flex-direction: column;">
-                    <!-- Header with close button -->
-                    <div style="position: relative; background: linear-gradient(135deg, #0014dc, #0010a8); padding: 20px; border-radius: 16px 16px 0 0;">
-                        <h2 style="margin: 0; color: white; font-size: 24px; font-weight: bold; text-align: center;">SLB</h2>
-                        <span id="close-logo-icon" style="position: absolute; top: 15px; right: 20px; font-size: 28px; cursor: pointer; color: white; font-weight: bold;">&times;</span>
-                    </div>
-                    
-                    <!-- Content area with scroll -->
-                    <div style="flex: 1; overflow-y: auto; padding: 0;">
-                        <!-- Company description section -->
-                        <div style="padding: 24px; background: #f8f9ff; border-bottom: 2px solid #0014dc;">
-                            <p style="margin: 0 0 16px 0; font-size: 16px; line-height: 1.6; color: #333;">
-                                <strong style="color: #0014dc;">斯伦贝谢</strong> 是一家全球科技公司，致力于能源创新驱动，构建和谐地球家园
-                            </p>
-                            <p style="margin: 0; font-size: 16px; line-height: 1.6; color: #555;">
-                                我们的专业知识涵盖数字化转型、脱碳技术和能源转型解决方案，帮助客户解锁能源获取，以造福全人类。
-                            </p>
-                        </div>
-                        
-                        <!-- Image gallery section -->
-                        <div style="padding: 24px;">
-                            <h3 style="margin: 0 0 20px 0; color: #0014dc; font-size: 20px; text-align: center;">我们的运营与创新</h3>
-                            <div id="image-gallery" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; max-width: 100%;">
-                                ${companyImages.map(image => `
-                                    <div style="position: relative; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0, 20, 220, 0.1); transition: transform 0.3s ease, box-shadow 0.3s ease; cursor: pointer;" 
-                                         onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 8px 20px rgba(0, 20, 220, 0.2)'" 
-                                         onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(0, 20, 220, 0.1)'">
-                                        <img src="${image.src}" alt="${image.title}" 
-                                             style="width: 100%; height: 150px; object-fit: cover; display: block;">
-                                        <div style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0, 20, 220, 0.8)); color: white; padding: 12px; text-align: center;">
-                                            <p style="margin: 0; font-size: 14px; font-weight: 500;">${image.title}</p>
-                                        </div>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            document.body.appendChild(popup);
-
-            // Add close icon functionality
-            const closeIcon = document.getElementById('close-logo-icon');
-            closeIcon.addEventListener('click', () => {
-                document.body.removeChild(popup);
-            });
-
-            // Add click-outside-to-close functionality
-            popup.addEventListener('click', (e) => {
-                if (e.target === popup) {
-                    document.body.removeChild(popup);
-                }
-            });
-
-            // Add escape key functionality
-            const handleEscape = (e) => {
-                if (e.key === 'Escape') {
-                    document.body.removeChild(popup);
-                    document.removeEventListener('keydown', handleEscape);
-                }
-            };
-            document.addEventListener('keydown', handleEscape);
-        }
-    }
 
     setupLogoArea() {
         const topWidth = 22;  // Width of the top edge
@@ -720,8 +618,7 @@ export class App {
         const highlightMaterial = new THREE.MeshBasicMaterial({map: highlightTexture, transparent: true, opacity: 0})
         this.highlightMesh = new THREE.Mesh(highlightGeometry, highlightMaterial)
         // this.highlightMesh.position.set(46, -22.5, 0)
-        // this.highlightMesh.position.set(55, 5.5, 1)
-        this.highlightMesh.position.set(52, -18, 1)
+        this.highlightMesh.position.set(55, 5.5, 1)
         this.scene.add(this.highlightMesh)
         const edges = new THREE.EdgesGeometry(highlightGeometry);
         this.lineMaterial = new THREE.LineBasicMaterial({transparent: true, opacity: 0})
@@ -732,16 +629,14 @@ export class App {
     }
 
     addPlayer(x, y) {
-        // const textureLoader = new THREE.TextureLoader()
-        // const playerTexture = textureLoader.load('/textures/male1.png')
-        // playerTexture.colorSpace = THREE.SRGBColorSpace
+        const textureLoader = new THREE.TextureLoader()
+        const playerTexture = textureLoader.load('/textures/male1.png')
+        playerTexture.colorSpace = THREE.SRGBColorSpace
         const playerGeometry = new THREE.PlaneGeometry(10, 18)
-        // const palyerMaterial = new THREE.MeshBasicMaterial({map: playerTexture, transparent: true})
-        this.palyerMaterial = new THREE.MeshBasicMaterial({map: this.playerFrontTexture, transparent: true})
-        this.playerMesh = new THREE.Mesh(playerGeometry, this.palyerMaterial)
-        // this.playerMesh = new THREE.Mesh(playerGeometry, palyerMaterial)
+        const palyerMaterial = new THREE.MeshBasicMaterial({map: playerTexture, transparent: true})
+        this.playerMesh = new THREE.Mesh(playerGeometry, palyerMaterial)
         // this.playerMesh.position.set(0, 0, 1)
-        this.playerMesh.position.set(x, y, 1)
+        this.playerMesh.position.set(1, 8, 1)
         this.scene.add(this.playerMesh)
     }
 
@@ -758,121 +653,17 @@ export class App {
         //     // { type: 'circle', x: 0, y: 38.40, radius: 23.6 },
         //     { type: 'ellipsRing', x: -0.4, y: 32.80, innerLongRadius: 32.6, outerLongRadius: 46, innerShortRadius: 20, outerShortRadius: 24 },
         // ]
-        // this.moveableAreas = [
-        //     { type: 'line', x1: -29.07, y1: -1.62, x2: 72.30, y2: -64.03 },
-        //     { type: 'line', x1: -29.07, y1: -1.62, x2: -1.42, y2: 16.20 },
-        //     { type: 'line', x1: -1.42, y1: 16.20, x2: -67.02, y2: 54.60 },
-        //     { type: 'line', x1: -8.87, y1: -15.66, x2: -57.22, y2: -45.67 },
-        //     { type: 'line', x1: 12.34, y1: -27.96, x2: 68.54, y2: 6.15 },
-        //     { type: 'line', x1: 41.05, y1: -10.46, x2: 74.8, y2: -31.82 },
-        //     { type: 'line', x1: 49.31, y1: 56.02, x2: 27.24, y2: 41.65 },
-        //     { type: 'line', x1: -55.05, y1: 48.65, x2: -10.14, y2: 22.14 },
-        //     { type: 'line', x1: -55.98, y1: 47.05, x2: -39.7, y2: 58.37 },
-        //     { type: 'ellipsRing', x: 1.13, y: 5.81, innerLongRadius: 95.8, outerLongRadius: 96.6, innerShortRadius: 62.2, outerShortRadius: 65.4 },
-        // ]
-        // this.moveableAreas = [
-        //     { type: 'line', x1: -34.24, y1: -52.99, x2: 29.04, y2: -19.97 },
-        //     { type: 'line', x1: 44.36, y1: -50.67, x2: -66.67, y2: -6.84 },
-        //     { type: 'line', x1: -29.92, y1: -53.47, x2: 44.21, y2: -54.11 },
-        //     { type: 'line', x1: -35.13, y1: -51.48, x2: -99.18, y2: -18.23 },
-        //     { type: 'line', x1: -99.18, y1: -18.23, x2: -91.05, y2: 9.10 },
-        //     { type: 'line', x1: -91.05, y1: 9.10, x2: -35.21, y2: 34.27 },
-        //     { type: 'line', x1: -35.21, y1: 34.27, x2: -6.02, y2: 33.87 },
-        //     { type: 'line', x1: -6.02, y1: 33.87, x2: 87.74, y2: -2.05 },
-        //     { type: 'line', x1: 87.74, y1: -2.05, x2: 94.31, y2: -24.23 },
-        //     { type: 'line', x1: 94.31, y1: -24.23, x2: 47.00, y2: -50.34 },
-        //     { type: 'line', x1: 47.00, y1: -50.34, x2: -26.49, y2: -55.87 },
-        //     { type: 'line', x1: -34.17, y1: -51.28, x2: -63.52, y2: -44.17 },
-        //     { type: 'line', x1: -8.25, y1: -29.87, x2: -8.00, y2: -39.95 },
-        //     { type: 'line', x1: 12.44, y1: -25.57, x2: 13.75, y2: -39.48 },
-        //     { type: 'line', x1: 13.04, y1: -51.96, x2: 20.16, y2: 24.59 },
-        //     { type: 'line', x1: -92.71, y1: -24.36, x2: -64.72, y2: -45.47 },
-        //     { type: 'line', x1: -63.42, y1: -44.30, x2: -82.64, y2: -34.23 },
-        //     { type: 'line', x1: 33.61, y1: -43.86, x2: 38.21, y2: -37.84 },
-        //     { type: 'circle', x: -35.46, y: -52.21, radius: 10 },
-        //     { type: 'circle', x: 3.11, y: -35.24, radius: 10 },
-        //     { type: 'circle', x: -20.16, y: -55.83, radius: 5 },
-        //     { type: 'circle', x: -15.20, y: -56.34, radius: 5 },
-        //     { type: 'circle', x: -10.28, y: -57.02, radius: 5 },
-        //     { type: 'circle', x: -5.43, y: -58.10, radius: 5 },
-        //     { type: 'circle', x: -0.54, y: -57.47, radius: 5 },
-        //     { type: 'circle', x: 4.34, y: -58.02, radius: 5 },
-        //     { type: 'circle', x: 9.06, y: -57.86, radius: 5 },
-        //     { type: 'circle', x: 13.7, y: -57.35, radius: 5 },
-        //     { type: 'circle', x: 18.35, y: -55.76, radius: 5 },
-        //     { type: 'circle', x: 23.31, y: -56.12, radius: 5 },
-        //     { type: 'circle', x: 28.26, y: -55.51, radius: 5 },
-        //     { type: 'circle', x: 41.87, y: -50.42, radius: 8 },
-        //     { type: 'circle', x: 33.17, y: -55.77, radius: 5 },
-        //     { type: 'circle', x: 66.06, y: -42.63, radius: 5 },
-        //     { type: 'circle', x: 56.29, y: -48.00, radius: 5 },
-        //     { type: 'circle', x: 61.12, y: -45.31, radius: 5 },
-        //     { type: 'circle', x: 77.29, y: 4.46, radius: 5 },
-        //     { type: 'circle', x: 92.42, y: -28.08, radius: 5 },
-        //     { type: 'circle', x: 70.82, y: -41.11, radius: 5 },
-        //     { type: 'circle', x: 74.94, y: -38.33, radius: 5 },
-        //     { type: 'circle', x: 79.40, y: -36.65, radius: 5 },
-        //     { type: 'circle', x: 39.07, y: 19.21, radius: 5 },
-        //     { type: 'circle', x: 15.11, y: 28.44, radius: 5 },
-        //     { type: 'circle', x: 19.83, y: 27.17, radius: 5 },          
-        //     { type: 'circle', x: 30.03, y: 22.59, radius: 5 },
-        //     { type: 'circle', x: 51.32, y: 14.53, radius: 5 },
-        //     { type: 'circle', x: 60.72, y: 10.89, radius: 5 },
-        //     { type: 'circle', x: 83.42, y: -33.81, radius: 5 },
-        //     { type: 'circle', x: 94.28, y: -21.87, radius: 6 },
-        //     { type: 'circle', x: 95.99, y: -17.46, radius: 6 },
-        //     { type: 'circle', x: 94.09, y: -11.81, radius: 6 },
-        //     { type: 'circle', x: 88.12, y: -32.14, radius: 6 },
-        //     { type: 'circle', x: -94.23, y: -23.56, radius: 6 },
-        //     { type: 'circle', x: -89.85, y: -29.63, radius: 6 },
-        //     { type: 'circle', x: -64.76, y: -44.95, radius: 6 },
-        //     { type: 'circle', x: -10.60, y: 34.01, radius: 6 },
-        //     { type: 'circle', x: -90.65, y: 9.13, radius: 8 },
-        //     { type: 'circle', x: -16.30, y: 35.68, radius: 8 },
-        //     { type: 'circle', x: 87.87, y: -2.35, radius: 8 },
-        //     { type: 'circle', x: -23.86, y: 35.09, radius: 8 },
-        //     { type: 'circle', x: -35.22, y: 34.24, radius: 8 },
-        //     { type: 'circle', x: -83.87, y: -33.86, radius: 8 },
-        //     { type: 'circle', x: -97.73, y: -5.58, radius: 8 },
-        //     { type: 'circle', x: -95.65, y: 2.16, radius: 8 },
-        //     { type: 'circle', x: -76.73, y: 18.25, radius: 8 },
-        //     { type: 'circle', x: -51.66, y: 29.44, radius: 8 },
-        //     { type: 'circle', x: -63.22, y: 24.22, radius: 8 },
-        //     { type: 'circle', x: 30.44, y: 42.51, radius: 10 },
-        // ]
         this.moveableAreas = [
-            { type: 'rectangle', x1: -11.977720036002513, y1: -18.694415587728447, x2: 15.138427124746196, y2: -27.822337649086293 }, 
-            { type: 'line', x1: -11.961067811865474, y1: -18.871875913286818, x2: -66.7777200360024, y2: -2.152279963997509 },
-            { type: 'circle', x: -11.875786437626878, y: -20.128730162779203, radius: 8 },
-            { type: 'line', x1: 14.89376618407358, y1: -26.225786437626905, x2: 46.33497833620545, y2: -37.07086578651012 },
-            { type: 'line', x1: 3.11, y1: -24.84, x2: 29.46634918610399, y2: -13.437561338236064 },
-            { type: 'line', x1: 3.11, y1: -24.84, x2: -34.87132752230956, y2: -39.28507934888321 },
-            { type: 'rectangle', x1: -25.407871555018975, y1: -37.57797256769662, x2: 39.774466094067286, y2: -44.02893936688444 }, 
-            { type: 'line', x1: -22.755180361560868, y1: -41.105180361560855, x2: -48.88797974644653, y2: -34.89685424949232 },
-            { type: 'line', x1: 39.72005050633886, y1: -37.695129855222056, x2: 88.69132752231053, y2: -22.191471862576154 },
-            { type: 'line', x1: 88.53569260370033, y1: -22.241724394270413, x2: 98.1290908859021, y2: -1.3262915010152807 },
-            { type: 'line', x1: 89.30310242291951, y1: -1.64689757708128, x2: -8.779444430272754, y2: 27.182243815158508 },
-            { type: 'circle', x: 92.07538956566566, y: -2.6025324956916904, radius: 8 },
-            { type: 'circle', x: 86.02909088590069, y: -22.264264068711924, radius: 8 },
-            { type: 'circle', x: 16.410357133746793, y: -24.53224022578353, radius: 5 },
-            { type: 'line', x1: -8.744415587728419, y1: 26.74448045156712, x2: -43.74254326381655, y2: 25.01254326381659 },
-            { type: 'line', x1: -43.74254326381655, y1: 25.01254326381659, x2: -92.38884194358131, y2: 6.36624458405141 },
-            { type: 'line', x1: -92.38884194358131, y1: 6.36624458405141, x2: -97.67706704297206, y2: -9.901374439273418 },
-            { type: 'line', x1: -97.67706704297206, y1: -9.901374439273418, x2: -73.95726188957782, y2: -27.038841943581758 },
-            { type: 'line', x1: -73.95726188957782, y1: -27.038841943581758, x2: -33.53522727852479, y2: -38.66970773009192 },
-            { type: 'circle', x: -92.64620125646208, y: 6.211828996322994, radius: 8 },
-            { type: 'circle', x: -76.78518395093556, y: -26.830811690796338, radius: 8 },
-            { type: 'circle', x: -43.65726188957785, y: 25.18310601229369, radius: 8 },
-            { type: 'circle', x: 34.62507575950778, y: -37.78005409571389, radius: 8 },
-            { type: 'circle', x: -22.734783489600566, y: 26.581233688381797, radius: 8 },
-            { type: 'circle', x: -30.442629918993983, y: 27.320573516602007, radius: 8 },        
-            { type: 'circle', x: -15.005432893254934, y: 28.420216382855166, radius: 8 },     
-        ]
-    }
-
-    addTransportAreas() {
-        this.transportAreas = [
-            { type: 'circle', x: 37.84969696196694, y: -26.282640687119287, radius: 5 },
+            { type: 'line', x1: -29.07, y1: -1.62, x2: 72.30, y2: -64.03 },
+            { type: 'line', x1: -29.07, y1: -1.62, x2: -1.42, y2: 16.20 },
+            { type: 'line', x1: -1.42, y1: 16.20, x2: -67.02, y2: 54.60 },
+            { type: 'line', x1: -8.87, y1: -15.66, x2: -57.22, y2: -45.67 },
+            { type: 'line', x1: 12.34, y1: -27.96, x2: 68.54, y2: 6.15 },
+            { type: 'line', x1: 41.05, y1: -10.46, x2: 74.8, y2: -31.82 },
+            { type: 'line', x1: 49.31, y1: 56.02, x2: 27.24, y2: 41.65 },
+            { type: 'line', x1: -55.05, y1: 48.65, x2: -10.14, y2: 22.14 },
+            { type: 'line', x1: -55.98, y1: 47.05, x2: -39.7, y2: 58.37 },
+            { type: 'ellipsRing', x: 1.13, y: 5.81, innerLongRadius: 95.8, outerLongRadius: 96.6, innerShortRadius: 62.2, outerShortRadius: 65.4 },
         ]
     }
 
@@ -898,12 +689,6 @@ export class App {
         ]
     }
 
-    addTransportAreas2() {
-        this.transportAreas = [
-            { type: 'circle', x: -29.97, y:-45.96, radius: 10 },
-        ]
-    }
-
     calcMouse(event) {
         const mouse = new THREE.Vector2()
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1
@@ -917,15 +702,26 @@ export class App {
 
     getDirectionVector() {
         const direction = new THREE.Vector3(0, 0, 0)
-        if (this.moveForward) direction.y += 1
-        if (this.moveBackward) direction.y -= 1
-        if (this.moveLeft) direction.x -= 1
-        if (this.moveRight) direction.x += 1
+        if (this.moveForward) {
+            direction.y += 1
+        } else {
+            direction.y = 0
+        }
+        if (this.moveBackward) {
+            direction.y -= 1
+        } 
+        if (this.moveLeft) {
+            direction.x -= 1
+        } 
+        if (this.moveRight) {
+            direction.x += 1
+        } 
 
         if (direction.length() > 0) {
             direction.normalize()
         }
 
+        // console.log(`Direction Vector: x=${direction.x}, y=${direction.y}`)
         return direction
     }
 
@@ -966,15 +762,7 @@ export class App {
     }
 
     isMoveableArea(x, y) {
-        return this.calcAvailableArea(x, y, this.moveableAreas)
-    }
-
-    isTransportArea(x, y) {
-        return this.calcAvailableArea(x, y, this.transportAreas)
-    }
-
-    calcAvailableArea(x, y, areas = []) {
-        for (const area of areas) {
+        for (const area of this.moveableAreas) {
             if (area.type === 'rectangle') {
                 if (x >= area.x1 && x <= area.x2 && y <= area.y1 && y >= area.y2) {
                     return true
@@ -1001,7 +789,7 @@ export class App {
                     return true
                 }
             }  else if (area.type === 'line') {
-                const epsilon = 5
+                const epsilon = 2.5
                 const x1 = area.x1
                 const y1 = area.y1
                 const x2 = area.x2
@@ -1022,37 +810,5 @@ export class App {
             // Additional area types can be added here
         }
         return false
-    }
-
-    calcMouseClickMovementDirection() {
-        if (this.isClickMove) {
-            const playerPosition = this.playerMesh.position.clone()
-            const centerX = playerPosition.x
-            const centerY = playerPosition.y
-            const targetX = this.clickPoint.x
-            const targetY = this.clickPoint.y
-
-            if (targetY > centerY) {
-                this.palyerMaterial.map = this.playerBackTexture
-                this.moveForward = true
-                this.moveBackward = false
-            } else if (targetY < centerY) {
-                this.palyerMaterial.map = this.playerFrontTexture
-                this.moveBackward = true
-                this.moveForward = false
-            }
-
-            if (Math.abs(targetX - centerX) > 5) {
-                if (targetX > centerX) {
-                    this.palyerMaterial.map = this.playerRigthTexture
-                    this.moveRight = true
-                    this.moveLeft = false
-                } else if (targetX < centerX) {
-                    this.palyerMaterial.map = this.playerLeftTexture
-                    this.moveLeft = true
-                    this.moveRight = false
-                }
-            }
-        }
     }
 }
