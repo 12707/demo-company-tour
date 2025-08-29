@@ -2,8 +2,11 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { RapierPhysics } from 'three/examples/jsm/Addons'
 import { RapierHelper } from 'three/examples/jsm/helpers/RapierHelper.js'
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
 export class App {
     constructor() {
+        this.loader = new GLTFLoader()
         this.container = document.getElementById('scene-container');
         this.orbitControls = null
         this.physics = null
@@ -54,6 +57,13 @@ export class App {
         // this.animate()
     }
 
+    init3() {
+        this.setupScene3()
+        this.setupControls()
+        this.createLights3()
+        this.render3()
+    }
+
     setupScene() {
         this.renderer.setPixelRatio(window.devicePixelRatio)
         this.renderer.setSize(window.innerWidth, window.innerHeight)
@@ -67,6 +77,41 @@ export class App {
     setupScene2() {
         this.camera.position.set(0, -10, 100)
     }
+
+    setupScene3() {
+        this.camera = new THREE.PerspectiveCamera(25, window.innerWidth / window.innerHeight, 1, 100)
+        this.camera.position.set(18, 6, -12)
+        this.renderer.setAnimationLoop(() => this.animateForPhysicsWorld3())
+    }
+
+    setupControls3() {
+        this.controls = new OrbitControls(this.camera, this.renderer.domElement)
+        this.controls.target = new THREE.Vector3(0, 5, 0)
+        this.controls.update()
+    }
+
+    createLights3() {
+        const hemisphereLight = new THREE.HemisphereLight(0x555555, 0xFFFFFF)
+        this.scene.add(hemisphereLight)
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 4)
+        directionalLight.position.set(0, 5, -10)
+        directionalLight.castShadow = true
+        directionalLight.shadow.radius =10
+        directionalLight.shadow.blurSamples = 8
+        directionalLight.shadow.mapSize.width = 2048
+        directionalLight.shadow.mapSize.height = 2048
+
+        const size = 40
+        directionalLight.shadow.camera.left = - size
+        directionalLight.shadow.camera.bottom = - size
+        directionalLight.shadow.camera.right = size
+        directionalLight.shadow.camera.top = size
+        directionalLight.shadow.camera.near = 1
+        directionalLight.shadow.camera.far = 50
+        
+        this.scene.add(directionalLight)
+    }
+
     setupClickableSLB() {
         this.fnSLBClickHook = (event) => {
             this.mouse = this.calcMouse(event);
@@ -148,7 +193,7 @@ export class App {
                 console.log('The highlight region is clicked!')
                 this.clearScene()
                 this.removeEventListeners()
-                this.init2()
+                this.init3()
             }
         }
         document.addEventListener('click', this.fnHighlightClickHook)
@@ -202,6 +247,18 @@ export class App {
         this.playerMesh.userData.collider = this.physics.world.createCollider(colliderDesc)
     }
 
+    async setupPhysics3() {
+        this.physics = await RapierPhysics()
+        this.physicsHelper = new RapierHelper(this.physics.world)
+        this.scene.add(this.physicsHelper)
+        this.physics.addScene(this.scene)
+        this.playerController = this.physics.world.createCharacterController(0.01)
+        this.playerController.setApplyImpulsesToDynamicBodies(true)
+        this.playerController.setCharacterMass(3)
+        const colliderDesc = this.physics.RAPIER.ColliderDesc.cylinder(1, 0.8).setTranslation(0, 0, -1)
+        this.addFox(colliderDesc)
+    }
+
     render() {
         this.addMap()
         // this.addBoxMap()
@@ -222,6 +279,11 @@ export class App {
         this.addRoomLogo()
     }
 
+    render3() {
+        this.addGLB()
+        this.setupPhysics3()
+    }
+
     animate() {
         requestAnimationFrame(() => this.animate())
         
@@ -230,8 +292,8 @@ export class App {
             console.log(`current player's position: ${this.playerMesh.position.x}, ${this.playerMesh.position.y}, ${this.playerMesh.position.z}`)
             const tempPosition = this.playerMesh.position.clone().add(direction.multiplyScalar(this.walkSpeed))
             const isMoveable = this.isMoveableArea(tempPosition.x, tempPosition.y)
-            if (isMoveable) {
-            // if (true) {
+            // if (isMoveable) {
+            if (true) {
                 this.playerMesh.position.copy(tempPosition)
             } else {
                 console.log('Blocked by a non-moveable area')
@@ -254,6 +316,29 @@ export class App {
             const speed = 10 * delta
             const direction = this.getDirectionVector()
             const moveVector = new this.physics.RAPIER.Vector3(direction.x * speed, direction.y * speed, 0)
+            this.playerController.computeColliderMovement(this.playerMesh.userData.collider, moveVector)
+            const translation = this.playerController.computedMovement()
+            const position = this.playerMesh.userData.collider.translation()
+            position.x += translation.x;
+            position.y += translation.y;
+            position.z += translation.z;
+            this.playerMesh.userData.collider.setTranslation(position)
+            this.playerMesh.position.set(position.x, position.y, position.z)
+        }
+    }
+
+    animateForPhysicsWorld3() {
+        if (this.physicsHelper) {
+            this.physicsHelper.update()
+        }
+
+        this.renderer.render(this.scene, this.camera)
+
+        if (this.playerController && this.physics) {
+            const delta = 1 / 60
+            const speed = 10 * delta
+            const direction = this.getDirectionVector3()
+            const moveVector = new this.physics.RAPIER.Vector3(direction.x * speed, direction.y * speed, direction.z * speed)
             this.playerController.computeColliderMovement(this.playerMesh.userData.collider, moveVector)
             const translation = this.playerController.computedMovement()
             const position = this.playerMesh.userData.collider.translation()
@@ -319,6 +404,16 @@ export class App {
         const mapMaterial = new THREE.MeshBasicMaterial({map: mapTexture})
         this.mapMesh = new THREE.Mesh(mapGeometry, mapMaterial)
         this.scene.add(this.mapMesh)
+    }
+
+    addGLB() {
+        this.loader.load('/textures/slb_internal 2.glb', (gltf) => {
+            this.mapMesh = gltf.scene
+            this.mapMesh.position.set(0, 0, 0)
+            this.scene.add(gltf.scene)
+        }, undefined, (error) => {
+            console.error(error)
+        })
     }
 
     addExitSign() {
@@ -640,6 +735,17 @@ export class App {
         this.scene.add(this.playerMesh)
     }
 
+    addFox(colliderDesc) {
+        this.loader.load('/textures/fox.glb', (gltf) => {
+            this.playerMesh = gltf.scene
+            this.playerMesh.position.set(0, 1, 0)
+            this.playerMesh.userData.collider = this.physics.world.createCollider(colliderDesc)
+            this.scene.add(this.playerMesh)
+        }, undefined, (error) => {
+            console.error(error)
+        })
+    }
+
     addMoveableAreas() {
         // this.moveableAreas = [
         //     // entrance main path
@@ -704,17 +810,44 @@ export class App {
         const direction = new THREE.Vector3(0, 0, 0)
         if (this.moveForward) {
             direction.y += 1
-        } else {
-            direction.y = 0
         }
+
         if (this.moveBackward) {
             direction.y -= 1
         } 
+
         if (this.moveLeft) {
             direction.x -= 1
         } 
+
         if (this.moveRight) {
             direction.x += 1
+        } 
+
+        if (direction.length() > 0) {
+            direction.normalize()
+        }
+
+        // console.log(`Direction Vector: x=${direction.x}, y=${direction.y}`)
+        return direction
+    }
+
+    getDirectionVector3() {
+        const direction = new THREE.Vector3(0, 0, 0)
+        if (this.moveForward) {
+            direction.z += 1
+        }
+
+        if (this.moveBackward) {
+            direction.z -= 1
+        } 
+
+        if (this.moveLeft) {
+            direction.x += 1
+        } 
+
+        if (this.moveRight) {
+            direction.x -= 1
         } 
 
         if (direction.length() > 0) {
